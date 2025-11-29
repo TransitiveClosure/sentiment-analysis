@@ -1,6 +1,7 @@
 from flask import Blueprint, render_template, request, jsonify, send_file
 import uuid, os
-from .tasks import executor, TASKS, long_processing
+from .tasks import process_file
+from threading import Thread
 
 main = Blueprint("main", __name__)
 
@@ -15,45 +16,18 @@ def upload():
     file = request.files["file"]
     task_id = str(uuid.uuid4())
 
-    upload_path = f"app/uploads/{task_id}.dat"
+    input_path = f"app/uploads/{task_id}.dat"
     result_path = f"app/static/results/{task_id}.txt"
     plot_path = f"app/static/results/{task_id}.png"
 
-    file.save(upload_path)
+    file.save(input_path)
 
-    # Запуск фоновой обработки
-    future = executor.submit(long_processing, upload_path, result_path, plot_path)
-    TASKS[task_id] = {
-        "future": future,
-        "result_path": result_path,
-        "plot_path": plot_path,
-    }
+    # запуск фоновой обработки
+    Thread(target=process_file, args=(task_id, input_path, result_path, plot_path)).start()
 
     return jsonify({"task_id": task_id})
 
 
-@main.route("/status/<task_id>")
-def status(task_id):
-    task = TASKS.get(task_id)
-    if not task:
-        return jsonify({"error": "task not found"}), 404
-
-    future = task["future"]
-
-    if future.done():
-        return jsonify({
-            "ready": True,
-            "download_url": f"/download/{task_id}",
-            "plot_url": f"/static/results/{task_id}.png"
-        })
-
-    return jsonify({"ready": False})
-
-
 @main.route("/download/<task_id>")
 def download(task_id):
-    task = TASKS.get(task_id)
-    if not task:
-        return "Task not found", 404
-
-    return send_file(task["result_path"], as_attachment=True)
+    return send_file(f"app/static/results/{task_id}.txt", as_attachment=True)

@@ -2,51 +2,66 @@
 <html>
 <head>
     <meta charset="utf-8">
-    <title>File Processing</title>
+    <title>Progress Processing</title>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
 </head>
-<body>
 
+<body>
 <h2>Загрузить файл</h2>
 
 <form id="uploadForm" enctype="multipart/form-data">
-    <input type="file" name="file">
+    <input type="file" name="file" required>
     <button type="submit">Загрузить</button>
 </form>
 
-<div id="status" style="margin-top:20px;"></div>
+<div id="progress-container" style="display:none; margin-top:20px;">
+    <div style="width:300px; height:20px; background:#ddd;">
+        <div id="progress-bar" style="height:20px; width:0%; background:green;"></div>
+    </div>
+    <p id="progress-text">0%</p>
+</div>
+
+<div id="result"></div>
 
 <script>
+const socket = io();
+
 document.getElementById("uploadForm").onsubmit = async (e) => {
     e.preventDefault();
 
     let formData = new FormData(e.target);
-
-    let uploadResp = await fetch("/upload", {
+    let resp = await fetch("/upload", {
         method: "POST",
         body: formData
     });
 
-    let data = await uploadResp.json();
+    let data = await resp.json();
     let taskId = data.task_id;
 
-    let statusDiv = document.getElementById("status");
-    statusDiv.innerHTML = "Обработка началась...";
+    document.getElementById("progress-container").style.display = "block";
+    document.getElementById("progress-bar").style.width = "0%";
+    document.getElementById("progress-text").innerText = "0%";
 
-    let interval = setInterval(async () => {
-        let resp = await fetch(`/status/${taskId}`);
-        let st = await resp.json();
+    socket.on("progress", msg => {
+        if (msg.task_id !== taskId) return;
 
-        if (st.ready) {
-            clearInterval(interval);
+        let p = msg.progress;
+        document.getElementById("progress-bar").style.width = p + "%";
+        document.getElementById("progress-text").innerText = p + "%";
+    });
 
-            statusDiv.innerHTML = `
-                <h3>Готово!</h3>
-                <a href="${st.download_url}" download>Скачать результат</a><br><br>
-                <img src="${st.plot_url}" style="max-width:600px">
-            `;
-        }
-    }, 1000);
+    socket.on("finished", msg => {
+        if (msg.task_id !== taskId) return;
+
+        document.getElementById("progress-text").innerText = "100% - Готово!";
+        document.getElementById("result").innerHTML = `
+            <h3>Результат</h3>
+            <a href="${msg.result_url}" download>Скачать файл</a><br><br>
+            <img src="${msg.plot_url}" style="max-width:600px;">
+        `;
+    });
 };
 </script>
+
 </body>
 </html>
