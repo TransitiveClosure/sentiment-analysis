@@ -10,14 +10,18 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     python3-dev \
     && rm -rf /var/lib/apt/lists/*
 
-RUN python3 -m venv /app/venv
-
+RUN python -m venv /app/venv
 ENV PATH="/app/venv/bin:$PATH"
 
 COPY requirements.txt .
 
 RUN pip install --no-cache-dir --upgrade pip \
-    && pip install --no-cache-dir -r requirements.txt
+    && pip install --no-cache-dir -r requirements.txt \
+    && pip cache purge
+
+RUN apt-get purge -y build-essential g++ python3-dev \
+    && apt-get autoremove -y \
+    && rm -rf /var/lib/apt/lists/*
 
 COPY . .
 
