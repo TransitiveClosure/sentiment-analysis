@@ -18,7 +18,7 @@ app = Flask(__name__)
 app.secret_key = 'super_secret_hackathon_key'
 
 # Constants
-DEFAULT_DATA_PATH = os.path.join('data', 'train.csv')
+DEFAULT_DATA_PATH = os.path.join('data', 'mock_train.csv')
 USERS_FILE = os.path.join('data', 'users.json')
 MODEL_PATH = 'ridge_max_model.pkl'
 
