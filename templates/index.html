@@ -1,0 +1,569 @@
+{% extends "base.html" %}
+
+{% block toolbar %}
+<div class="search-bar">
+    <i class="fa-solid fa-search"></i>
+    <input id="globalSearchInput" placeholder="Поиск по отзывам..." type="text">
+</div>
+<div class="actions">
+    <button class="btn-primary" id="globalExportBtn" style="background: #0f766e; border-color: #0f766e;">
+        <i class="fa-solid fa-download"></i> Экспорт (Все)
+    </button>
+    <button class="btn-primary" id="globalExportFilteredBtn">
+        <i class="fa-solid fa-filter"></i> Экспорт (Фильтр)
+    </button>
+</div>
+{% endblock %}
+
+{% block content %}
+<div class="dashboard-header">
+    <h1>Обзор тональности отзывов</h1>
+    <p class="subtitle">Аналитика обращений граждан в реальном времени</p>
+</div>
+
+<!-- Stats Cards -->
+<div class="stats-grid">
+    <div class="stat-card">
+        <div class="stat-icon info">
+            <i class="fa-solid fa-comments"></i>
+        </div>
+        <div class="stat-info">
+            <h3>Всего отзывов</h3>
+            <p class="stat-value" id="stat-total">{{ stats.total }}</p>
+        </div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon positive">
+            <i class="fa-solid fa-face-smile"></i>
+        </div>
+        <div class="stat-info">
+            <h3>Позитивные</h3>
+            <p class="stat-value" id="stat-positive">{{ chart_data.sentiment.data[2] }}</p>
+        </div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon neutral">
+            <i class="fa-solid fa-face-meh"></i>
+        </div>
+        <div class="stat-info">
+            <h3>Нейтральные</h3>
+            <p class="stat-value" id="stat-neutral">{{ chart_data.sentiment.data[1] }}</p>
+        </div>
+    </div>
+
+    <div class="stat-card">
+        <div class="stat-icon negative">
+            <i class="fa-solid fa-face-frown"></i>
+        </div>
+        <div class="stat-info">
+            <h3>Негативные</h3>
+            <p class="stat-value" id="stat-negative">{{ chart_data.sentiment.data[0] }}</p>
+        </div>
+    </div>
+</div>
+
+<!-- Charts Section -->
+<div class="charts-grid">
+    <div class="chart-card">
+        <div class="card-header">
+            <h2>Распределение тональности</h2>
+        </div>
+        <div class="chart-container">
+            <canvas id="sentimentChart"></canvas>
+        </div>
+    </div>
+
+    <div class="chart-card">
+        <div class="card-header">
+            <h2>Источники отзывов</h2>
+        </div>
+        <div class="chart-container">
+            <canvas id="sourceChart"></canvas>
+        </div>
+    </div>
+
+    <div class="chart-card" style="grid-column: 1 / -1;">
+        <div class="card-header">
+            <h2>Тональность по источникам</h2>
+        </div>
+        <div class="chart-container">
+            <canvas id="sentimentBySourceChart"></canvas>
+        </div>
+    </div>
+
+
+</div>
+
+<!-- Recent Reviews Table -->
+<div class="table-card">
+    <div class="card-header">
+        <h2>Последние отзывы</h2>
+        <div class="table-actions" style="display: flex; gap: 10px; align-items: center;">
+            <select class="form-control" id="sourceFilter"
+                    style="padding: 0.5rem; border-radius: 4px; border: 1px solid #475569; background: #1e293b; color: #e2e8f0;">
+                <option value="all">Все источники</option>
+                {% for source in chart_data.sources.labels %}
+                <option value="{{ source }}">{{ source }}</option>
+                {% endfor %}
+            </select>
+
+            <select class="form-control" id="sentimentFilter"
+                    style="padding: 0.5rem; border-radius: 4px; border: 1px solid #475569; background: #1e293b; color: #e2e8f0;">
+                <option value="all">Все тональности</option>
+                <option value="2">Положительный</option>
+                <option value="1">Нейтральный</option>
+                <option value="0">Отрицательный</option>
+            </select>
+        </div>
+    </div>
+    <div class="table-responsive">
+        <table class="data-table">
+            <thead>
+            <tr>
+                <th>ID</th>
+                <th>Источник</th>
+                <th>Текст отзыва</th>
+                <th>Тональность</th>
+                <th>Действия</th>
+            </tr>
+            </thead>
+            <tbody id="reviewsBody">
+            {% for review in reviews %}
+            <tr id="row-{{ review.ID }}">
+                <td>#{{ review.ID }}</td>
+                <td><span class="badge source">{{ review.src }}</span></td>
+                <td class="text-cell">
+                    <div class="text-truncate" id="text-{{ review.ID }}">{{ review.text }}</div>
+                </td>
+                <td>
+                        <span class="badge sentiment-{{ review.label }}" data-label="{{ review.label }}"
+                              id="label-{{ review.ID }}">
+                            {{ review.label_text }}
+                        </span>
+                </td>
+                <td>
+                    <button class="btn-action" onclick="openEditModal({{ review.ID }})" title="Редактировать"><i
+                            class="fa-solid fa-pen"></i></button>
+                </td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    <div class="table-footer" style="text-align: center; padding: 1rem;">
+        <button class="btn-primary" id="loadMoreBtn" style="padding: 0.5rem 2rem; cursor: pointer;">Загрузить еще
+            (50)
+        </button>
+    </div>
+</div>
+
+<!-- Edit Modal -->
+<div class="modal" id="editModal"
+     style="display: none; position: fixed; z-index: 1000; left: 0; top: 0; width: 100%; height: 100%; overflow: auto; background-color: rgba(0,0,0,0.5);">
+    <div class="modal-content"
+         style="background-color: #1e293b; margin: 15% auto; padding: 20px; border: 1px solid #475569; width: 50%; border-radius: 8px; color: #e2e8f0;">
+        <span class="close" onclick="closeEditModal()"
+              style="color: #aaa; float: right; font-size: 28px; font-weight: bold; cursor: pointer;">&times;</span>
+        <h2>Редактирование отзыва</h2>
+        <form id="editForm">
+            <input id="editId" type="hidden">
+            <div style="margin-bottom: 1rem;">
+                <label for="editText" style="display: block; margin-bottom: 0.5rem;">Текст отзыва:</label>
+                <textarea id="editText" rows="4"
+                          style="width: 100%; padding: 0.5rem; border-radius: 4px; border: 1px solid #475569; background: #0f172a; color: #e2e8f0;"></textarea>
+            </div>
+            <div style="margin-bottom: 1rem;">
+                <label for="editLabel" style="display: block; margin-bottom: 0.5rem;">Тональность:</label>
+                <select id="editLabel"
+                        style="width: 100%; padding: 0.5rem; border-radius: 4px; border: 1px solid #475569; background: #0f172a; color: #e2e8f0;">
+                    <option value="2">Положительный</option>
+                    <option value="1">Нейтральный</option>
+                    <option value="0">Отрицательный</option>
+                </select>
+            </div>
+            <div style="text-align: right;">
+                <button class="btn-small" onclick="closeEditModal()" style="background: #64748b; margin-right: 10px;"
+                        type="button">Отмена
+                </button>
+                <button class="btn-primary" type="submit">Сохранить</button>
+            </div>
+        </form>
+    </div>
+</div>
+
+<script>
+    // Pass data from Flask to JS
+    const chartData = {{ chart_data | tojson }};
+
+    // Modal functions need to be global
+    function openEditModal(id) {
+        const text = document.getElementById(`text-${id}`).textContent;
+        const labelElem = document.getElementById(`label-${id}`);
+        const label = labelElem.getAttribute('data-label');
+
+        document.getElementById('editId').value = id;
+        document.getElementById('editText').value = text;
+        document.getElementById('editLabel').value = label;
+
+        document.getElementById('editModal').style.display = 'block';
+    }
+
+    function closeEditModal() {
+        document.getElementById('editModal').style.display = 'none';
+    }
+
+    document.addEventListener('DOMContentLoaded', function () {
+        // Pagination & Filtering Logic
+        let currentOffset = 10;
+        const limit = 50;
+        const loadMoreBtn = document.getElementById('loadMoreBtn');
+        const reviewsBody = document.getElementById('reviewsBody');
+
+        const searchInput = document.getElementById('globalSearchInput');
+        const sourceFilter = document.getElementById('sourceFilter');
+        const sentimentFilter = document.getElementById('sentimentFilter');
+        const exportBtn = document.getElementById('globalExportBtn');
+        const exportFilteredBtn = document.getElementById('globalExportFilteredBtn');
+
+        // Export All Logic
+        exportBtn.addEventListener('click', function () {
+            window.location.href = '/api/export';
+        });
+
+        // Export Filtered Logic
+        exportFilteredBtn.addEventListener('click', function () {
+            const search = searchInput.value;
+            const source = sourceFilter.value;
+            const sentiment = sentimentFilter.value;
+
+            const params = new URLSearchParams({
+                search: search,
+                source: source,
+                sentiment: sentiment
+            });
+
+            window.location.href = `/api/export?${params.toString()}`;
+        });
+
+        // Edit Form Logic
+        const editForm = document.getElementById('editForm');
+        editForm.addEventListener('submit', function (e) {
+            e.preventDefault();
+
+            const id = document.getElementById('editId').value;
+            const text = document.getElementById('editText').value;
+            const label = document.getElementById('editLabel').value;
+
+            fetch('/api/reviews/update', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({ id: id, text: text, label: label }),
+            })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.status === 'success') {
+                        // Update UI
+                        document.getElementById(`text-${id}`).textContent = text;
+                        const labelElem = document.getElementById(`label-${id}`);
+                        labelElem.setAttribute('data-label', label);
+
+                        let labelText = '';
+                        let labelClass = '';
+                        if (label == '0') { labelText = 'Отрицательный'; labelClass = 'sentiment-0'; }
+                        else if (label == '1') { labelText = 'Нейтральный'; labelClass = 'sentiment-1'; }
+                        else { labelText = 'Положительный'; labelClass = 'sentiment-2'; }
+
+                        labelElem.textContent = labelText;
+                        labelElem.className = `badge ${labelClass}`;
+
+                        closeEditModal();
+                        alert('Отзыв обновлен!');
+
+                        // Refresh stats and charts
+                        fetchStats();
+                    } else {
+                        alert('Ошибка при сохранении: ' + data.message);
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Ошибка при отправке запроса');
+                });
+        });
+
+        // Chart Instances
+        let sentimentChart = null;
+        let sourceChart = null;
+        let sentimentBySourceChart = null;
+
+        function initCharts() {
+            // Sentiment Chart (Doughnut)
+            const ctxSentiment = document.getElementById('sentimentChart').getContext('2d');
+            sentimentChart = new Chart(ctxSentiment, {
+                type: 'doughnut',
+                data: {
+                    labels: chartData.sentiment.labels,
+                    datasets: [{
+                        data: chartData.sentiment.data,
+                        backgroundColor: [
+                            '#ef4444', // Negative - Red
+                            '#94a3b8', // Neutral - Gray
+                            '#22c55e'  // Positive - Green
+                        ],
+                        borderWidth: 0,
+                        hoverOffset: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'bottom',
+                            labels: {
+                                color: '#e2e8f0',
+                                font: { family: 'Inter' }
+                            }
+                        }
+                    }
+                }
+            });
+
+            // Source Chart (Bar)
+            const ctxSource = document.getElementById('sourceChart').getContext('2d');
+            sourceChart = new Chart(ctxSource, {
+                type: 'bar',
+                data: {
+                    labels: chartData.sources.labels,
+                    datasets: [{
+                        label: 'Количество отзывов',
+                        data: chartData.sources.data,
+                        backgroundColor: '#3b82f6',
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            grid: { color: '#334155' },
+                            ticks: { color: '#94a3b8' }
+                        },
+                        x: {
+                            grid: { display: false },
+                            ticks: { color: '#94a3b8' }
+                        }
+                    },
+                    plugins: {
+                        legend: { display: false }
+                    }
+                }
+            });
+
+            // Sentiment By Source Chart (Stacked Bar)
+            // Check if data exists (it might not on initial load if we didn't pass it in index route yet, 
+            // but we should probably update index route too. For now, let's assume it might be empty or we fetch it).
+            // Actually, we didn't update index route to pass sentiment_by_source. 
+            // So we should fetch it or handle empty state.
+            // Let's handle it gracefully.
+            const sbsData = chartData.sentiment_by_source || { labels: [], datasets: { 0: [], 1: [], 2: [] } };
+
+            const ctxSbs = document.getElementById('sentimentBySourceChart').getContext('2d');
+            sentimentBySourceChart = new Chart(ctxSbs, {
+                type: 'bar',
+                data: {
+                    labels: sbsData.labels,
+                    datasets: [
+                        {
+                            label: 'Негативные',
+                            data: sbsData.datasets[0],
+                            backgroundColor: '#ef4444',
+                        },
+                        {
+                            label: 'Нейтральные',
+                            data: sbsData.datasets[1],
+                            backgroundColor: '#94a3b8',
+                        },
+                        {
+                            label: 'Позитивные',
+                            data: sbsData.datasets[2],
+                            backgroundColor: '#22c55e',
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: {
+                            stacked: true,
+                            grid: { display: false },
+                            ticks: { color: '#94a3b8' }
+                        },
+                        y: {
+                            stacked: true,
+                            beginAtZero: true,
+                            grid: { color: '#334155' },
+                            ticks: { color: '#94a3b8' }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            position: 'top',
+                            labels: { color: '#e2e8f0' }
+                        }
+                    }
+                }
+            });
+        }
+
+        function updateCharts(data) {
+            // Update Stats Cards
+            if (data.stats) {
+                document.getElementById('stat-total').textContent = data.stats.total;
+                document.getElementById('stat-positive').textContent = data.stats.positive;
+                document.getElementById('stat-neutral').textContent = data.stats.neutral;
+                document.getElementById('stat-negative').textContent = data.stats.negative;
+            }
+
+            // Update Sentiment Chart
+            if (sentimentChart) {
+                sentimentChart.data.datasets[0].data = data.sentiment.data;
+                sentimentChart.update();
+            }
+
+            // Update Source Chart
+            if (sourceChart) {
+                sourceChart.data.labels = data.sources.labels;
+                sourceChart.data.datasets[0].data = data.sources.data;
+                sourceChart.update();
+            }
+
+            // Update Sentiment By Source Chart
+            if (sentimentBySourceChart && data.sentiment_by_source) {
+                sentimentBySourceChart.data.labels = data.sentiment_by_source.labels;
+                sentimentBySourceChart.data.datasets[0].data = data.sentiment_by_source.datasets[0];
+                sentimentBySourceChart.data.datasets[1].data = data.sentiment_by_source.datasets[1];
+                sentimentBySourceChart.data.datasets[2].data = data.sentiment_by_source.datasets[2];
+                sentimentBySourceChart.update();
+            }
+        }
+
+        function loadReviews(reset = false) {
+            if (reset) {
+                currentOffset = 0;
+                reviewsBody.innerHTML = '';
+                loadMoreBtn.style.display = 'block';
+                loadMoreBtn.disabled = false;
+                loadMoreBtn.textContent = 'Загрузить еще (50)';
+            }
+
+            loadMoreBtn.textContent = 'Загрузка...';
+            loadMoreBtn.disabled = true;
+
+            const search = searchInput.value;
+            const source = sourceFilter.value;
+            const sentiment = sentimentFilter.value;
+
+            const params = new URLSearchParams({
+                offset: currentOffset,
+                limit: limit,
+                search: search,
+                source: source,
+                sentiment: sentiment
+            });
+
+            // Fetch Reviews
+            fetch(`/api/reviews?${params.toString()}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.length > 0) {
+                        data.forEach(review => {
+                            const row = document.createElement('tr');
+                            row.id = `row-${review.ID}`;
+                            row.innerHTML = `
+                                <td>#${review.ID}</td>
+                                <td><span class="badge source">${review.src}</span></td>
+                                <td class="text-cell">
+                                    <div class="text-truncate" id="text-${review.ID}">${review.text}</div>
+                                </td>
+                                <td>
+                                    <span class="badge sentiment-${review.label}" id="label-${review.ID}" data-label="${review.label}">
+                                        ${review.label_text}
+                                    </span>
+                                </td>
+                                <td>
+                                    <button class="btn-action" title="Редактировать" onclick="openEditModal(${review.ID})"><i class="fa-solid fa-pen"></i></button>
+                                </td>
+                            `;
+                            reviewsBody.appendChild(row);
+                        });
+                        currentOffset += data.length;
+                        loadMoreBtn.textContent = 'Загрузить еще (50)';
+                        loadMoreBtn.disabled = false;
+                    } else {
+                        if (reset) {
+                            reviewsBody.innerHTML = '<tr><td colspan="5" style="text-align:center;">Ничего не найдено</td></tr>';
+                        }
+                        loadMoreBtn.style.display = 'none';
+                    }
+
+                    if (data.length < limit) {
+                        loadMoreBtn.style.display = 'none';
+                    }
+                })
+                .catch(error => {
+                    console.error('Error loading reviews:', error);
+                    loadMoreBtn.textContent = 'Ошибка загрузки';
+                    loadMoreBtn.disabled = false;
+                });
+
+            // Fetch Stats (only on reset/filter change)
+            if (reset) {
+                fetchStats();
+            }
+        }
+
+        function fetchStats() {
+            const search = searchInput.value;
+            const source = sourceFilter.value;
+            const sentiment = sentimentFilter.value;
+
+            const params = new URLSearchParams({
+                search: search,
+                source: source,
+                sentiment: sentiment
+            });
+
+            fetch(`/api/stats?${params.toString()}`)
+                .then(response => response.json())
+                .then(data => {
+                    updateCharts(data);
+                })
+                .catch(error => console.error('Error loading stats:', error));
+        }
+
+        loadMoreBtn.addEventListener('click', () => loadReviews(false));
+
+        // Debounce search
+        let timeout = null;
+        searchInput.addEventListener('input', () => {
+            clearTimeout(timeout);
+            timeout = setTimeout(() => loadReviews(true), 500);
+        });
+
+        sourceFilter.addEventListener('change', () => loadReviews(true));
+        sentimentFilter.addEventListener('change', () => loadReviews(true));
+
+        // Initialize Charts
+        initCharts();
+
+    });
+</script>
+{% endblock %}

@@ -1,0 +1,107 @@
+<!DOCTYPE html>
+<html lang="ru">
+
+<head>
+    <meta charset="UTF-8">
+    <meta content="width=device-width, initial-scale=1.0" name="viewport">
+    <title>Анализ Тональности | Hack&Change 2025</title>
+
+    <!-- Fonts -->
+    <link href="https://fonts.googleapis.com" rel="preconnect">
+    <link crossorigin href="https://fonts.gstatic.com" rel="preconnect">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <!-- Icons -->
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+
+    <!-- Custom CSS -->
+    <link href="{{ url_for('static', filename='css/style.css') }}" rel="stylesheet">
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+
+<body>
+<div class="app-container">
+    <aside class="sidebar">
+        <div class="logo">
+            <i class="fa-solid fa-brain"></i>
+            <span>Отзовись</span>
+        </div>
+
+        <nav class="nav-menu">
+            <a class="nav-item {{ 'active' if request.endpoint == 'index' else '' }}" href="{{ url_for('index') }}">
+                <i class="fa-solid fa-chart-pie"></i>
+                <span>Дашборд</span>
+            </a>
+            <a class="nav-item {{ 'active' if request.endpoint == 'upload_file' else '' }}"
+               href="{{ url_for('upload_file') }}">
+                <i class="fa-solid fa-upload"></i>
+                <span>Загрузка данных</span>
+            </a>
+            <a class="nav-item {{ 'active' if request.endpoint == 'validation' else '' }}"
+               href="{{ url_for('validation') }}">
+                <i class="fa-solid fa-check-double"></i>
+                <span>Валидация</span>
+            </a>
+            <a class="nav-item {{ 'active' if request.endpoint == 'settings' else '' }}"
+               href="{{ url_for('settings') }}">
+                <i class="fa-solid fa-gear"></i>
+                <span>Настройки</span>
+            </a>
+        </nav>
+
+        <div class="user-profile">
+            {% if session.get('user') %}
+            <a href="{{ url_for('logout') }}"
+               style="text-decoration: none; color: inherit; display: flex; align-items: center; gap: 0.75rem; width: 100%; cursor: pointer;"
+               title="Нажмите, чтобы выйти">
+                <div class="avatar">
+                    {{ session['user']['name'][0] }}
+                </div>
+                <div class="user-info">
+                    <span class="name">{{ session['user']['name'] }}</span>
+                    <span class="role">{{ session['user']['role'] }}</span>
+                </div>
+                <i class="fa-solid fa-right-from-bracket"
+                   style="margin-left: auto; color: var(--text-secondary);"></i>
+            </a>
+            {% else %}
+            <a href="{{ url_for('login') }}"
+               style="text-decoration: none; color: inherit; display: flex; align-items: center; gap: 0.75rem; width: 100%; cursor: pointer;"
+               title="Нажмите, чтобы войти">
+                <div class="avatar"
+                     style="background: var(--bg-dark); border: 1px solid var(--border); color: var(--text-secondary);">
+                    <i class="fa-solid fa-user"></i>
+                </div>
+                <div class="user-info">
+                    <span class="name">Гость</span>
+                    <span class="role">Нажмите для входа</span>
+                </div>
+                <i class="fa-solid fa-right-to-bracket"
+                   style="margin-left: auto; color: var(--text-secondary);"></i>
+            </a>
+            {% endif %}
+        </div>
+    </aside>
+
+    <div class="sidebar-overlay"></div>
+
+    <main class="main-content">
+        <button class="mobile-menu-btn">
+            <i class="fa-solid fa-bars"></i>
+        </button>
+        <header class="top-bar">
+            {% block toolbar %}{% endblock %}
+        </header>
+
+        <div class="content-wrapper">
+            {% block content %}{% endblock %}
+        </div>
+    </main>
+</div>
+
+<script src="{{ url_for('static', filename='js/main.js') }}"></script>
+</body>
+
+</html>

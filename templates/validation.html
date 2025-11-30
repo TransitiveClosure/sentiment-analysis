@@ -1,0 +1,412 @@
+{% extends "base.html" %}
+
+{% block content %}
+<style>
+    .upload-container {
+        max-width: 800px;
+        margin: 0 auto;
+    }
+
+    .upload-area {
+        display: block;
+        width: 100%;
+        border: 2px dashed var(--border);
+        border-radius: 1rem;
+        padding: 3rem 2rem;
+        text-align: center;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        background-color: rgba(30, 41, 59, 0.5);
+        position: relative;
+    }
+
+    .upload-area:hover,
+    .upload-area.dragover {
+        border-color: var(--accent);
+        background-color: rgba(59, 130, 246, 0.05);
+    }
+
+    .upload-icon {
+        font-size: 3rem;
+        color: var(--text-secondary);
+        margin-bottom: 1rem;
+        transition: color 0.3s;
+    }
+
+    .upload-area:hover .upload-icon {
+        color: var(--accent);
+    }
+
+    .file-info {
+        margin-top: 1rem;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        gap: 0.5rem;
+        color: var(--text-primary);
+        background: rgba(59, 130, 246, 0.1);
+        padding: 0.5rem 1rem;
+        border-radius: 0.5rem;
+        display: inline-flex;
+    }
+
+    .hidden-input {
+        display: none;
+    }
+
+    .loading-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(15, 23, 42, 0.8);
+        backdrop-filter: blur(4px);
+        z-index: 1000;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        flex-direction: column;
+        gap: 1rem;
+    }
+
+    .spinner {
+        width: 50px;
+        height: 50px;
+        border: 4px solid var(--border);
+        border-top-color: var(--accent);
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+    }
+
+    @keyframes spin {
+        to {
+            transform: rotate(360deg);
+        }
+    }
+
+    /* Validation Specific Styles */
+    .results-container {
+        display: none;
+        margin-top: 3rem;
+        animation: fadeIn 0.5s ease-in-out;
+    }
+
+    .metrics-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 1.5rem;
+        margin-bottom: 2rem;
+    }
+
+    .metric-card {
+        background: var(--bg-card);
+        padding: 1.5rem;
+        border-radius: 1rem;
+        border: 1px solid var(--border);
+        text-align: center;
+    }
+
+    .metric-label {
+        color: var(--text-secondary);
+        font-size: 0.9rem;
+        margin-bottom: 0.5rem;
+    }
+
+    .metric-value {
+        font-size: 2rem;
+        font-weight: 700;
+    }
+
+    .metric-value.primary {
+        color: var(--accent);
+    }
+
+    .metric-value.success {
+        color: var(--success);
+    }
+
+    @keyframes fadeIn {
+        from {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+
+        to {
+            opacity: 1;
+            transform: translateY(0);
+        }
+    }
+</style>
+
+<div class="upload-container">
+    <div class="dashboard-header" style="text-align: center; margin-bottom: 3rem;">
+        <h1>Валидация</h1>
+        <p class="subtitle">Загрузите размеченный CSV файл (с колонками text и label) для проверки качества</p>
+    </div>
+
+    <form id="validationForm">
+        <div class="table-card">
+            <label class="upload-area" id="dropZone">
+                <input accept=".csv" class="hidden-input" id="validationFile" required type="file">
+                <i class="fa-solid fa-check-double upload-icon"></i>
+                <h3 style="margin-bottom: 0.5rem; font-weight: 500;">Нажмите или перетащите файл валидации</h3>
+                <p style="color: var(--text-secondary); font-size: 0.9rem;">Требуются колонки: text, label</p>
+                <div class="file-info" id="fileInfo" style="display: none;">
+                    <i class="fa-solid fa-file-csv"></i>
+                    <span id="fileName">filename.csv</span>
+                </div>
+            </label>
+
+            <div style="margin-top: 2rem; text-align: center;">
+                <button class="btn-primary" style="width: 100%; justify-content: center; font-size: 1.1rem; padding: 1rem;"
+                        type="submit">
+                    <i class="fa-solid fa-play"></i> Запустить
+                </button>
+            </div>
+        </div>
+    </form>
+
+    <div class="results-container" id="validationResults">
+        <h3 style="color: var(--text-primary); margin-bottom: 1.5rem; text-align: center;">Результаты проверки</h3>
+
+        <div class="metrics-grid">
+            <div class="metric-card">
+                <div class="metric-label">Macro F1 Score</div>
+                <div class="metric-value primary" id="macroF1Score">-</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-label">Accuracy</div>
+                <div class="metric-value success" id="accuracyScore">-</div>
+            </div>
+        </div>
+
+        <div class="table-card">
+            <div class="card-header">
+                <h2>Детализация по классам</h2>
+                <button class="btn-small" id="downloadReportBtn"
+                        style="display: flex; align-items: center; gap: 0.5rem;">
+                    <i class="fa-solid fa-download"></i> Скачать отчет
+                </button>
+            </div>
+            <div class="table-responsive">
+                <table class="data-table">
+                    <thead>
+                    <tr>
+                        <th>Класс</th>
+                        <th>Precision</th>
+                        <th>Recall</th>
+                        <th>F1-Score</th>
+                        <th>Support</th>
+                    </tr>
+                    </thead>
+                    <tbody id="classReportBody">
+                    <!-- Filled by JS -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Loading Overlay -->
+<div class="loading-overlay" id="loadingOverlay">
+    <div class="spinner"></div>
+    <h3 style="color: white;">Валидация данных...</h3>
+    <p style="color: var(--text-secondary);">Вычисляем метрики качества</p>
+</div>
+
+<!-- Error Toast/Message -->
+<div id="errorMessage"
+     style="display: none; position: fixed; bottom: 20px; right: 20px; background: var(--bg-card); border: 1px solid var(--danger); color: var(--danger); padding: 1rem; border-radius: 0.5rem; z-index: 2000; animation: slideIn 0.3s ease;">
+</div>
+
+<script>
+    const dropZone = document.getElementById('dropZone');
+    const fileInput = document.getElementById('validationFile');
+    const fileInfo = document.getElementById('fileInfo');
+    const fileName = document.getElementById('fileName');
+    const validationForm = document.getElementById('validationForm');
+    const loadingOverlay = document.getElementById('loadingOverlay');
+    const resultsDiv = document.getElementById('validationResults');
+    const errorDiv = document.getElementById('errorMessage');
+    const downloadBtn = document.getElementById('downloadReportBtn');
+
+    let currentReportData = null;
+
+    // Drag and Drop events
+    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, preventDefaults, false);
+    });
+
+    function preventDefaults(e) {
+        e.preventDefault();
+        e.stopPropagation();
+    }
+
+    ['dragenter', 'dragover'].forEach(eventName => {
+        dropZone.addEventListener(eventName, highlight, false);
+    });
+
+    ['dragleave', 'drop'].forEach(eventName => {
+        dropZone.addEventListener(eventName, unhighlight, false);
+    });
+
+    function highlight(e) {
+        dropZone.classList.add('dragover');
+    }
+
+    function unhighlight(e) {
+        dropZone.classList.remove('dragover');
+    }
+
+    dropZone.addEventListener('drop', handleDrop, false);
+
+    function handleDrop(e) {
+        const dt = e.dataTransfer;
+        const files = dt.files;
+        handleFiles(files);
+    }
+
+    fileInput.addEventListener('change', function () {
+        handleFiles(this.files);
+    });
+
+    function handleFiles(files) {
+        if (files.length > 0) {
+            const file = files[0];
+            if (file.type === 'text/csv' || file.name.endsWith('.csv')) {
+                fileInput.files = files;
+                fileName.textContent = file.name;
+                fileInfo.style.display = 'inline-flex';
+            } else {
+                showError('Пожалуйста, загрузите CSV файл');
+            }
+        }
+    }
+
+    function showError(msg) {
+        errorDiv.textContent = msg;
+        errorDiv.style.display = 'block';
+        setTimeout(() => {
+            errorDiv.style.display = 'none';
+        }, 5000);
+    }
+
+    function downloadReport() {
+        if (!currentReportData) return;
+
+        const labels = {
+            '0': 'Отрицательный',
+            '1': 'Нейтральный',
+            '2': 'Положительный',
+            'accuracy': 'Accuracy',
+            'macro avg': 'Macro Avg',
+            'weighted avg': 'Weighted Avg'
+        };
+
+        // CSV Header
+        let csvContent = "Class,Precision,Recall,F1-Score,Support\n";
+
+        // Rows
+        for (const [key, metrics] of Object.entries(currentReportData)) {
+            if (key === 'accuracy') {
+                // Accuracy format is different in sklearn report dict
+                csvContent += `Accuracy,,,${metrics},\n`;
+                continue;
+            }
+
+            const labelName = labels[key] || key;
+            csvContent += `${labelName},${metrics.precision.toFixed(4)},${metrics.recall.toFixed(4)},${metrics['f1-score'].toFixed(4)},${metrics.support}\n`;
+        }
+
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const link = document.createElement("a");
+        const url = URL.createObjectURL(blob);
+
+        link.setAttribute("href", url);
+        link.setAttribute("download", "validation_report.csv");
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+    }
+
+    downloadBtn.addEventListener('click', downloadReport);
+
+    validationForm.addEventListener('submit', async function (e) {
+        e.preventDefault();
+
+        if (fileInput.files.length === 0) {
+            showError('Пожалуйста, выберите файл');
+            return;
+        }
+
+        const formData = new FormData();
+        formData.append('file', fileInput.files[0]);
+
+        resultsDiv.style.display = 'none';
+        loadingOverlay.style.display = 'flex';
+
+        try {
+            const response = await fetch('/api/validate', {
+                method: 'POST',
+                body: formData
+            });
+
+            const data = await response.json();
+
+            if (response.ok) {
+                currentReportData = data.report;
+
+                // Update Metrics
+                document.getElementById('macroF1Score').textContent = (data.macro_f1 * 100).toFixed(2) + '%';
+                document.getElementById('accuracyScore').textContent = (data.accuracy * 100).toFixed(2) + '%';
+
+                // Update Table
+                const tbody = document.getElementById('classReportBody');
+                tbody.innerHTML = '';
+
+                const labels = {
+                    '0': 'Отрицательный',
+                    '1': 'Нейтральный',
+                    '2': 'Положительный'
+                };
+
+                for (const [key, metrics] of Object.entries(data.report)) {
+                    if (['accuracy', 'macro avg', 'weighted avg'].includes(key)) continue;
+
+                    const row = document.createElement('tr');
+                    const labelName = labels[key] || key;
+
+                    // Determine badge color for class
+                    let badgeClass = '';
+                    if (key === '0') badgeClass = 'sentiment-0';
+                    else if (key === '1') badgeClass = 'sentiment-1';
+                    else if (key === '2') badgeClass = 'sentiment-2';
+
+                    row.innerHTML = `
+                        <td><span class="badge ${badgeClass}">${labelName}</span></td>
+                        <td>${(metrics.precision * 100).toFixed(1)}%</td>
+                        <td>${(metrics.recall * 100).toFixed(1)}%</td>
+                        <td>${(metrics['f1-score'] * 100).toFixed(1)}%</td>
+                        <td>${metrics.support}</td>
+                    `;
+                    tbody.appendChild(row);
+                }
+
+                resultsDiv.style.display = 'block';
+                // Scroll to results
+                resultsDiv.scrollIntoView({ behavior: 'smooth' });
+            } else {
+                showError(data.error || 'Произошла ошибка при валидации');
+            }
+        } catch (error) {
+            console.error('Error:', error);
+            showError('Ошибка сети или сервера');
+        } finally {
+            loadingOverlay.style.display = 'none';
+        }
+    });
+</script>
+{% endblock %}
